@@ -25,7 +25,7 @@ class RenderfarmException(Exception):
 class LoginFailedException(Exception):
     def __init__(self, msg="no reason given"):
         self.message = msg
-    def __str__(seLf):
+    def __str__(self):
         return "Login failed: "+self.message
 
 class SessionCancelFailedException(Exception):
