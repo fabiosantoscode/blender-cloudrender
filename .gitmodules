@@ -1,3 +1,6 @@
 [submodule "cycles-xml-exporter"]
-	path = cycles-xml-exporter
+	path = xml_exporter
 	url = https://github.com/fabiosantoscode/cycles-xml-exporter
+[submodule "emcycles"]
+	path = emcycles
+	url = https://github.com/fabiosantoscode/emcycles
