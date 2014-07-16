@@ -1,6 +1,6 @@
 [submodule "cycles-xml-exporter"]
-	path = xml_exporter
+	path = cloudrender/xml_exporter
 	url = https://github.com/fabiosantoscode/cycles-xml-exporter
 [submodule "emcycles"]
-	path = emcycles
+	path = cloudrender/emcycles
 	url = https://github.com/fabiosantoscode/emcycles

@@ -25,6 +25,12 @@ from .prepare import _prepare_scene
 from .upload import _ore_upload
 from .rpc import rffi, _do_refresh
 from .exceptions import LoginFailedException, SessionCancelFailedException
+from .xml_exporter.io_scene_cycles.export_cycles import export_cycles
+
+def render(scene, crowdprocess):
+    from io import StringIO
+    fp = StringIO()
+    export_cycles(fp=fp, scene=scene)
 
 class ORE_LoginOp(bpy.types.Operator):
     bl_idname = 'ore.login'
