@@ -12,8 +12,17 @@ import testconfig
 scene = bpy.data.scenes['Scene']
 crowdprocess = CrowdProcess(testconfig.USERNAME, testconfig.PASSWORD)
 
-# print(list(viewport_divisions(100, 100, 11)))
+assert list(viewport_divisions(10, 10, 5)) == [
+    (0, 0, 5, 5), (5, 0, 5, 5),
+    (0, 5, 5, 5), (5, 5, 5, 5)
+]
 
+assert list(viewport_divisions(9, 9, 5)) == [
+    (0, 0, 5, 5), (5, 0, 4, 5),
+    (0, 5, 5, 4), (5, 5, 4, 4)
+]
 
-render(scene=scene, crowdprocess=crowdprocess)
+assert list(viewport_divisions(1, 1, 5)) == [ (0, 0, 1, 1) ]
+
+# render(scene=scene, crowdprocess=crowdprocess)
 
