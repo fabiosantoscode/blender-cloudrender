@@ -27,6 +27,31 @@ from .rpc import rffi, _do_refresh
 from .exceptions import LoginFailedException, SessionCancelFailedException
 from .xml_exporter.io_scene_cycles.export_cycles import export_cycles
 
+def viewport_columns(width, size=10):
+    last = None
+
+    for i in range(width // size):
+        last = (i * size) + size
+        yield (i * size, size)
+
+    if last is not None and last < width:  # uneven row div
+        yield (last, width - last)
+
+
+def viewport_divisions(height, width, bucket_size=10):
+    last = None
+    for row in range(height // bucket_size):
+        y = row * bucket_size
+        for x, col_width in viewport_columns(width, bucket_size):
+            last = y + bucket_size
+            yield (x, y, col_width, bucket_size)
+
+    if last is not None and last < height:
+        for x, col_width in viewport_columns(width, bucket_size):
+            yield (x, last, col_width, height - last)
+
+
+
 def render(scene, crowdprocess):
     from io import StringIO
     fp = StringIO()
