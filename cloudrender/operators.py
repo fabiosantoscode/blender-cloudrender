@@ -56,8 +56,57 @@ def viewport_divisions(height, width, bucket_size=10):
 
 def render(scene, crowdprocess):
     from io import StringIO
+    import json
     fp = StringIO()
-    export_cycles(fp=fp, scene=scene)
+
+    #resolution_fraction = (100 / scene.render.resolution_percentage)
+    resolution_fraction = 0.025
+
+    height, width = (
+        int(scene.render.resolution_x * resolution_fraction),
+        int(scene.render.resolution_y * resolution_fraction),
+    )
+        
+    # export_cycles(fp=fp, scene=scene)
+    # scene_xml = fp.getvalue()
+    scene_xml = open('example_scene.xml').read()#
+    emcycles_core = open('cloudrender/emcycles/cloudrender_core.js').read()
+
+    crowdprocess_func = '''
+        function Run(data) {
+            var Module = {
+                print: function () {},
+                tileX: data.x,
+                tileY: data.y,
+                tileH: data.h,
+                tileW: data.w
+            }
+
+            var SCENE = %s;
+            var INCLUDES = [];
+
+            %s;
+
+            data.tile = Module.imageData
+
+            return data
+        }
+    ''' % (json.dumps(scene_xml), emcycles_core)
+
+    open('/tmp/wow.js', 'w').write(crowdprocess_func)
+
+    job = crowdprocess.job(crowdprocess_func)
+
+    job_data = ({ 'x': x, 'y': y, 'w': w, 'h': h } for x, y, w, h in viewport_divisions(height, width))
+
+    responses = job(job_data)
+    tiles, errors = list(responses.results), list(responses.errors)
+
+    print('%d tiles:' % len(tiles), list(tiles))
+    print('%d errors:' % len(errors), list(errors))
+
+    open('/tmp/tiles.json', 'w').write(json.dumps(tiles))
+
 
 class ORE_LoginOp(bpy.types.Operator):
     bl_idname = 'ore.login'
