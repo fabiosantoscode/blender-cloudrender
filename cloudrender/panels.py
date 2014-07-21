@@ -17,11 +17,6 @@
 # ##### END GPL LICENSE BLOCK #####
 
 import bpy
-import time
-
-from .utils import _read_credentials, check_status
-from .rpc import rffi
-from .exceptions import LoginFailedException
 
 class RenderButtonsPanel():
     bl_space_type = 'PROPERTIES'
@@ -40,19 +35,8 @@ class LOGIN_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
 
     def draw(self, context):
         # login
-        if not bpy.loginInserted:
-            if _read_credentials():
-                try:
-                    if rffi.login(None, True, False):
-                        bpy.passwordCorrect = True
-                        bpy.loginInserted = True
-                except LoginFailedException:
-                    bpy.passwordCorrect = False
-                    bpy.loginInserted = False
-
         layout = self.layout
         ore = context.scene.ore_render
-        check_status(ore)
 
         if bpy.passwordCorrect == False:
             row = layout.row()
@@ -79,27 +63,3 @@ class RENDER_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
         layout = self.layout
         sce = context.scene
         ore = sce.ore_render
-
-        if (bpy.passwordCorrect == False or bpy.loginInserted == False):
-            layout.label(text='You must login first')
-        else:
-            row.prop(ore, 'resox')
-            row.prop(ore, 'resoy')
-            row = layout.row()
-            row.prop(ore, 'start')
-            row.prop(ore, 'end')
-            row = layout.row()
-            row.prop(ore, 'fps')
-            row = layout.row()
-            row.prop(ore, 'samples')
-            row.prop(ore, 'subsamples')
-            row = layout.row()
-            layout.separator()
-            row = layout.row()
-
-            check_status(ore)
-            if (len(bpy.errors) > 0):
-                bpy.ready = False
-            else:
-                bpy.ready = True
-

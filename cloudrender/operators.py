@@ -16,16 +16,8 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-import hashlib
-
 import bpy
 
-from .utils import _write_credentials, _read_credentials
-from .prepare import _prepare_scene
-from .upload import _ore_upload
-from .rpc import rffi, _do_refresh
-from .exceptions import LoginFailedException, SessionCancelFailedException
-from .xml_exporter.io_scene_cycles.export_cycles import export_cycles
 
 def viewport_columns(width, size=10):
     last = 0
@@ -119,65 +111,17 @@ class ORE_LoginOp(bpy.types.Operator):
         ore.password = ore.password.strip()
         ore.username = ore.username.strip()
 
-        print("writing new credentials")
-        _write_credentials(hashlib.md5(ore.password.encode() + ore.username.encode()).hexdigest(),ore.username)
-        _read_credentials()
-        ore.password = ''
-        ore.username = ''
-        bpy.loginInserted = False
-        bpy.passwordCorrect = False
+        crowdprocess = CrowdProcess(ore.username, ore.password)
 
         try:
-            _do_refresh(self, True)
-
-            bpy.passwordCorrect = True
+            crowdprocess.list_jobs()
             bpy.loginInserted = True
-
-        except LoginFailedException as v:
-            bpy.ready = False
+            bpy.passwordCorrect = True
+        except:
             bpy.loginInserted = False
             bpy.passwordCorrect = False
-            ore.username = bpy.rffi_user
-            _write_credentials('', '')
-            _read_credentials()
-            ore.hash = ''
-            ore.password = ''
-            self.report({'WARNING'}, "Incorrect login: " + str(v))
-            print(v)
+            self.report({'WARNING'}, "Incorrect login for crowdprocess. Wrong password? Lel")
             return {'CANCELLED'}
-
-        return {'FINISHED'}
-
-class ORE_UploaderOp(bpy.types.Operator):
-    bl_idname = "ore.upload"
-    bl_label = "Render on Renderfarm.fi"
-
-    def execute(self, context):
-        bpy.uploadInProgress = True
-        _prepare_scene()
-
-        returnValue = _ore_upload(self, context)
-        bpy.uploadInProgress = False
-        return returnValue
-
-class ORE_ChangeUser(bpy.types.Operator):
-    bl_idname = "ore.change_user"
-    bl_label = "Change user"
-
-    def execute(self, context):
-        ore = context.scene.ore_render
-        _write_credentials('', '')
-        _read_credentials()
-        ore.password = ''
-        bpy.ore_sessions = []
-        ore.hash = ''
-        bpy.rffi_user = ''
-        bpy.rffi_hash = ''
-        bpy.rffi_creds_found = False
-        bpy.passwordCorrect = False
-        bpy.loginInserted = False
-        bpy.rffi_accepts = False
-        bpy.rffi_motd = ''
 
         return {'FINISHED'}
 

@@ -39,7 +39,8 @@ from bpy.props import PointerProperty, StringProperty, BoolProperty, EnumPropert
 
 from .panels import *
 from .operators import *
-from .rpc import RffiRpc
+
+
 
 bpy.CURRENT_VERSION = bl_info["version"][0]
 bpy.found_newer_version = False
