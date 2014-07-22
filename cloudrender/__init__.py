@@ -152,6 +152,8 @@ class CloudRender(bpy.types.RenderEngine):
 
         image = [[0,0,0,1]] * self.height * self.width
 
+        tiles_total = len(list(viewport_divisions(self.height, self.width)))
+        tiles_done = 1
         for tile in tiles:
             x, y, w, h = tile['x'], tile['y'], tile['w'], tile['h']
             pixel_colors = chunks((color / 255 for color in tile['tile']), 4)
@@ -171,6 +173,11 @@ class CloudRender(bpy.types.RenderEngine):
                         image[ind] = pixel_colors[ind]
                     except IndexError:
                         print(IndexError, x_coord, y_coord, x, y, h, w, ind)
+
+            result.layers[0].rect = image
+            self.update_result(result)
+            tiles_done += 1
+            self.update_progress(tiles_done / tiles_total)
 
         result.layers[0].rect = image
         self.end_result(result)
