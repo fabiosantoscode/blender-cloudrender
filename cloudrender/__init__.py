@@ -144,45 +144,57 @@ class CloudRender(bpy.types.RenderEngine):
             int(scene.render.resolution_x / resolution_fraction),
         )
 
-        tiles, errors = self.render_in_crowdprocess(scene)
-        # tiles = json.loads(open('tiles.json').read())
+        self.make_job(scene)
 
+        self.image = [(0,0,0,1)] * self.height * self.width
+        tiles_to_go = set(viewport_divisions(self.height, self.width))
 
-        result = self.begin_result(0, 0, self.width, self.height)
+        self.result = self.begin_result(0, 0, self.width, self.height)
 
-        image = [[0,0,0,1]] * self.height * self.width
-
-        tiles_total = len(list(viewport_divisions(self.height, self.width)))
+        tiles_total = len(tiles_to_go)
         tiles_done = 1
-        for tile in tiles:
-            x, y, w, h = tile['x'], tile['y'], tile['w'], tile['h']
-            pixel_colors = chunks((color / 255 for color in tile['tile']), 4)
-            pixel_colors = list(map(tuple, pixel_colors))
 
-            assert x >= 0
-            assert x + w <= self.width
-            assert y >= 0
-            assert y + h <= self.height
-            assert len(pixel_colors) == len(image), 'image is a different size from the received tile!'
+        for retry in range(5):
+            if not tiles_to_go:
+                break
 
-            for y_coord in range(y, y + h):
-                for x_coord in range(x, x + w):
-                    ind = (y_coord * self.width) + x_coord
+            if retry > 0:
+                print('Retrying some tiles... %d' % retry)
 
-                    try:
-                        image[ind] = pixel_colors[ind]
-                    except IndexError:
-                        print(IndexError, x_coord, y_coord, x, y, h, w, ind)
+            job_data = (
+                { 'x': x, 'y': y, 'w': w, 'h': h }
+                for x, y, w, h in tiles_to_go)
 
-            result.layers[0].rect = image
-            self.update_result(result)
-            tiles_done += 1
-            self.update_progress(tiles_done / tiles_total)
+            for tile in self.job(job_data).results:
+                tile_data = (tile['x'], tile['y'],
+                    tile['w'], tile['h'])
+                self.draw_tile(*tile_data, tile=tile['tile'])
+                tiles_to_go.remove(tile_data)
+                tiles_done += 1
+                self.update_progress(tiles_done / tiles_total)
 
-        result.layers[0].rect = image
-        self.end_result(result)
+        self.result.layers[0].rect = self.image
+        self.end_result(self.result)
+        self.job.delete()
 
-    def render_in_crowdprocess(self, scene):
+    def draw_tile(self, x, y, w, h, tile):
+        pixel_colors = chunks((color / 255 for color in tile), 4)
+        pixel_colors = [tuple(color) for color in pixel_colors]
+
+        assert x >= 0 and x + w <= self.width
+        assert y >= 0 and y + h <= self.height
+        assert len(pixel_colors) == len(self.image)
+
+        for y_coord in range(y, y + h):
+            for x_coord in range(x, x + w):
+                ind = (y_coord * self.width) + x_coord
+                self.image[ind] = pixel_colors[ind]
+
+        self.result.layers[0].rect = self.image
+        self.update_result(self.result)
+
+
+    def make_job(self, scene):
         from io import StringIO
         import json
         from .xml_exporter.io_scene_cycles.export_cycles import export_cycles
@@ -224,18 +236,8 @@ class CloudRender(bpy.types.RenderEngine):
         crowdprocess = CrowdProcess(
             scene.ore_render.username, scene.ore_render.password)
 
-        job = crowdprocess.job(crowdprocess_func)
+        self.job = crowdprocess.job(crowdprocess_func)
 
-        from .operators import viewport_divisions # TODO move this func somewhere sensible
-        job_data = (
-            { 'x': x, 'y': y, 'w': w, 'h': h }
-            for x, y, w, h in viewport_divisions(self.height, self.width))
-
-        responses = job(job_data)
-
-        # open('/tmp/tiles.json', 'w').write(json.dumps(tiles))
-
-        return responses.results, responses.errors
 
 
 def register():
