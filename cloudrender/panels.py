@@ -17,6 +17,7 @@
 # ##### END GPL LICENSE BLOCK #####
 
 import bpy
+import cycles
 
 class RenderButtonsPanel():
     bl_space_type = 'PROPERTIES'

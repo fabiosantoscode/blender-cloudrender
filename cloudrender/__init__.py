@@ -28,8 +28,6 @@ bl_info = {
     "category": "Render"}
 
 import bpy
-import hashlib
-import http.client
 import math
 from os.path import isabs, isfile, join, exists
 import os
@@ -99,16 +97,6 @@ def renderEngine(render_engine):
     bpy.utils.register_class(render_engine)
     return render_engine
 
-licenses =  (
-        ('1', 'CC by-nc-nd', 'Creative Commons: Attribution Non-Commercial No Derivatives'),
-        ('2', 'CC by-nc-sa', 'Creative Commons: Attribution Non-Commercial Share Alike'),
-        ('3', 'CC by-nd', 'Creative Commons: Attribution No Derivatives'),
-        ('4', 'CC by-nc', 'Creative Commons: Attribution Non-Commercial'),
-        ('5', 'CC by-sa', 'Creative Commons: Attribution Share Alike'),
-        ('6', 'CC by', 'Creative Commons: Attribution'),
-        ('7', 'Copyright', 'Copyright, no license specified'),
-        )
-
 class ORESession(bpy.types.PropertyGroup):
     name = StringProperty(name='Name', description='Name of the session', maxlen=128, default='[session]')
 
@@ -116,40 +104,7 @@ class ORESettings(bpy.types.PropertyGroup):
     username = StringProperty(name='E-mail', description='E-mail for Renderfarm.fi', maxlen=256, default='')
     password = StringProperty(name='Password', description='Renderfarm.fi password', maxlen=256, default='')
 
-    shortdesc = StringProperty(name='Short description', description='A short description of the scene (100 characters)', maxlen=101, default='-')
-    tags = StringProperty(name='Tags', description='A list of tags that best suit the animation', maxlen=102, default='')
-    longdesc = StringProperty(name='Description', description='Description of the scene (2k)', maxlen=2048, default='')
-    title = StringProperty(name='Title', description='Title for this session (128 characters)', maxlen=128, default='')
-    url = StringProperty(name='Project URL', description='Project URL. Leave empty if not applicable', maxlen=256, default='')
-    engine = StringProperty(name='Engine', description='The rendering engine that is used for rendering', maxlen=64, default='blender')
-    samples = IntProperty(name='Samples', description='Number of samples that is used (Cycles only)', min=1, max=1000000, soft_min=1, soft_max=100000, default=100)
-    subsamples = IntProperty(name='Subsample Frames', description='Number of subsample frames that is used (Cycles only)', min=1, max=1000000, soft_min=1, soft_max=1000, default=10)
-    file_format = StringProperty(name='File format', description='File format used for the rendering', maxlen=30, default='PNG_FORMAT')
-
-    parts = IntProperty(name='Parts/Frame', description='', min=1, max=1000, soft_min=1, soft_max=64, default=1)
-    resox = IntProperty(name='Resolution X', description='X of render', min=1, max=10000, soft_min=1, soft_max=10000, default=1920)
-    resoy = IntProperty(name='Resolution Y', description='Y of render', min=1, max=10000, soft_min=1, soft_max=10000, default=1080)
-    memusage = IntProperty(name='Memory Usage', description='Estimated maximum memory usage during rendering in MB', min=1, max=6*1024, soft_min=1, soft_max=3*1024, default=256)
-    start = IntProperty(name='Start Frame', description='Start Frame', default=1)
-    end = IntProperty(name='End Frame', description='End Frame', default=250)
-    fps = IntProperty(name='FPS', description='FPS', min=1, max=120, default=25)
-
-    prepared = BoolProperty(name='Prepared', description='Set to True if preparation has been run', default=False)
-    debug = BoolProperty(name='Debug', description='Verbose output in console', default=False)
-    selected_session = IntProperty(name='Selected Session', description='The selected session', default=0)
-    hasUnsupportedSimulation = BoolProperty(name='HasSimulation', description='Set to True if therea re unsupported simulations', default=False)
-
-    inlicense = EnumProperty(items=licenses, name='Scene license', description='License speficied for the source files', default='1')
-    outlicense = EnumProperty(items=licenses, name='Product license', description='License speficied for the output files', default='1')
-    sessions = CollectionProperty(type=ORESession, name='Sessions', description='Sessions on Renderfarm.fi')
-    completed_sessions = CollectionProperty(type=ORESession, name='Completed sessions', description='Sessions that have been already rendered')
-    rejected_sessions = CollectionProperty(type=ORESession, name='Rejected sessions', description='Sessions that have been rejected')
-    pending_sessions = CollectionProperty(type=ORESession, name='Pending sessions', description='Sessions that are waiting for approval')
-    active_sessions = CollectionProperty(type=ORESession, name='Active sessions', description='Sessions that are currently rendering')
-    all_sessions = CollectionProperty(type=ORESession, name='All sessions', description='List of all of the users sessions')
-
 # session struct
-
 
 class RENDERFARM_MT_Session(bpy.types.Menu):
     bl_label = "Show Session"
@@ -169,12 +124,112 @@ class RENDERFARM_MT_Session(bpy.types.Menu):
             row.label(text="You must login first")
 
 
-class RenderfarmFi(bpy.types.RenderEngine):
+from itertools import zip_longest
+
+def chunks(iterable, chunksize, filler=None):
+    return zip_longest(*[iter(iterable)]*chunksize, fillvalue=filler)
+
+class CloudRender(bpy.types.RenderEngine):
     bl_idname = 'RENDERFARMFI_RENDER'
-    bl_label = "Renderfarm.fi"
+    bl_label = 'CloudRender'
+    bl_use_preview = False
+    bl_use_shading_nodes = True
 
     def render(self, scene):
-        print('Do test renders with Blender Render')
+        import json
+
+        resolution_fraction = (100 / scene.render.resolution_percentage)
+        self.height, self.width = (
+            int(scene.render.resolution_y / resolution_fraction),
+            int(scene.render.resolution_x / resolution_fraction),
+        )
+
+        tiles, errors = self.render_in_crowdprocess(scene)
+        # tiles = json.loads(open('tiles.json').read())
+
+
+        result = self.begin_result(0, 0, self.width, self.height)
+
+        image = [[0,0,0,1]] * self.height * self.width
+
+        for tile in tiles:
+            x, y, w, h = tile['x'], tile['y'], tile['w'], tile['h']
+            pixel_colors = chunks((color / 255 for color in tile['tile']), 4)
+            pixel_colors = list(map(tuple, pixel_colors))
+
+            assert x >= 0
+            assert x + w <= self.width
+            assert y >= 0
+            assert y + h <= self.height
+            assert len(pixel_colors) == len(image), 'image is a different size from the received tile!'
+
+            for y_coord in range(y, y + h):
+                for x_coord in range(x, x + w):
+                    ind = (y_coord * self.width) + x_coord
+
+                    try:
+                        image[ind] = pixel_colors[ind]
+                    except IndexError:
+                        print(IndexError, x_coord, y_coord, x, y, h, w, ind)
+
+        result.layers[0].rect = image
+        self.end_result(result)
+
+    def render_in_crowdprocess(self, scene):
+        from io import StringIO
+        import json
+        from .xml_exporter.io_scene_cycles.export_cycles import export_cycles
+        from .crowdprocess import CrowdProcess
+
+        fp = StringIO()
+
+        export_cycles(fp=fp, scene=scene)
+        scene_xml = fp.getvalue()
+        # scene_xml = open('example_scene.xml').read()
+        emcycles_core = open('cloudrender/emcycles/cloudrender_core.js').read()
+
+        crowdprocess_func = '''
+            function Run(data) {
+                var Module = {
+                    print: function () {},
+                    tileX: data.x,
+                    tileY: data.y,
+                    tileH: data.h,
+                    tileW: data.w
+                }
+
+                var SCENE = %s;
+                var INCLUDES = [];
+
+                %s;
+
+                data.tile = Module.imageData
+
+                return data
+            }
+        ''' % (json.dumps(scene_xml), emcycles_core)
+
+        open('/tmp/wow.js', 'w').write(crowdprocess_func)
+
+        crowdprocess = CrowdProcess(
+            scene.ore_render.username, scene.ore_render.password)
+
+        crowdprocess = CrowdProcess(
+            scene.ore_render.username, scene.ore_render.password)
+
+        job = crowdprocess.job(crowdprocess_func)
+
+        from .operators import viewport_divisions # TODO move this func somewhere sensible
+        job_data = (
+            { 'x': x, 'y': y, 'w': w, 'h': h }
+            for x, y, w, h in viewport_divisions(self.height, self.width))
+
+        responses = job(job_data)
+
+        # open('/tmp/tiles.json', 'w').write(json.dumps(tiles))
+
+        return responses.results, responses.errors
+
 
 def register():
     bpy.utils.register_module(__name__)
