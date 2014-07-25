@@ -17,7 +17,6 @@
 # ##### END GPL LICENSE BLOCK #####
 
 import bpy
-import cycles
 
 class RenderButtonsPanel():
     bl_space_type = 'PROPERTIES'
@@ -27,7 +26,7 @@ class RenderButtonsPanel():
 
 class LOGIN_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
     bl_label = 'Login to CrowdProcess'
-    COMPAT_ENGINES = set(['RENDERFARMFI_RENDER'])
+    COMPAT_ENGINES = set(['CLOUDRENDER'])
 
     @classmethod
     def poll(cls, context):
@@ -53,7 +52,7 @@ class LOGIN_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
 
 class RENDER_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
     bl_label = "Settings"
-    COMPAT_ENGINES = set(['RENDERFARMFI_RENDER'])
+    COMPAT_ENGINES = set(['CLOUDRENDER'])
 
     @classmethod
     def poll(cls, context):

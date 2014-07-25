@@ -40,18 +40,7 @@ from .operators import *
 
 
 
-bpy.CURRENT_VERSION = bl_info["version"][0]
-bpy.found_newer_version = False
-bpy.up_to_date = False
-bpy.download_location = 'http://www.renderfarm.fi/blender'
-
-bpy.rffi_creds_found = False
-bpy.rffi_user = ''
-bpy.rffi_hash = ''
 bpy.passwordCorrect = False
-bpy.loginInserted = False
-bpy.rffi_accepting = False
-bpy.rffi_motd = ''
 
 bpy.errorMessages = {
     'missing_desc': 'You need to enter a title, short and long description',
@@ -67,38 +56,10 @@ bpy.statusMessage = {
     'password': 'TRIA_RIGHT'
 }
 
-bpy.errors = []
-bpy.ore_sessions = []
-bpy.ore_completed_sessions = []
-bpy.ore_active_sessions = []
-bpy.ore_rejected_sessions = []
-bpy.ore_pending_sessions = []
-bpy.ore_active_session_queue = []
-bpy.ore_complete_session_queue = []
-bpy.queue_selected = -1
-bpy.errorStartTime = -1.0
-bpy.infoError = False
-bpy.cancelError = False
-bpy.texturePackError = False
-bpy.linkedFileError = False
-bpy.uploadInProgress = False
-try:
-    bpy.originalFileName = bpy.data.filepath
-except:
-    bpy.originalFileName = 'untitled.blend'
-bpy.particleBakeWarning = False
-bpy.childParticleWarning = False
-bpy.simulationWarning = False
-bpy.file_format_warning = False
-bpy.ready = False
-
 
 def renderEngine(render_engine):
     bpy.utils.register_class(render_engine)
     return render_engine
-
-class ORESession(bpy.types.PropertyGroup):
-    name = StringProperty(name='Name', description='Name of the session', maxlen=128, default='[session]')
 
 class ORESettings(bpy.types.PropertyGroup):
     username = StringProperty(name='E-mail', description='E-mail for Renderfarm.fi', maxlen=256, default='')
@@ -130,7 +91,7 @@ def chunks(iterable, chunksize, filler=None):
     return zip_longest(*[iter(iterable)]*chunksize, fillvalue=filler)
 
 class CloudRender(bpy.types.RenderEngine):
-    bl_idname = 'RENDERFARMFI_RENDER'
+    bl_idname = 'CLOUDRENDER'
     bl_label = 'CloudRender'
     bl_use_preview = False
     bl_use_shading_nodes = True
@@ -185,12 +146,19 @@ class CloudRender(bpy.types.RenderEngine):
         assert y >= 0 and y + h <= self.height
         assert len(pixel_colors) == len(self.image)
 
-        for y_coord in range(y, y + h):
-            for x_coord in range(x, x + w):
-                ind = (y_coord * self.width) + x_coord
-                self.image[ind] = pixel_colors[ind]
+        width = self.width
+        image = self.image
+        img_size = len(image)
 
-        self.result.layers[0].rect = self.image
+        for y_coord in range(y, y + h):
+            row = y_coord * width
+            rev_row = (self.height - y_coord - 1) * width
+            for x_coord in range(x, x + w):
+                ind = row + x_coord
+                rev_ind = rev_row + x_coord
+                image[rev_ind] = pixel_colors[ind]
+
+        self.result.layers[0].rect = image
         self.update_result(self.result)
 
 
@@ -251,32 +219,37 @@ def unregister():
 if __name__ == "__main__":
     register()
 
-# all panels, except render panel
-# Example of wrapping every class 'as is'
+from bl_ui import properties_render
+for member in dir(properties_render):
+    subclass = getattr(properties_render, member)
+    try:        subclass.COMPAT_ENGINES.add('CLOUDRENDER')
+    except:    pass
+del properties_render
+
 from bl_ui import properties_scene
 for member in dir(properties_scene):
     subclass = getattr(properties_scene, member)
-    try:        subclass.COMPAT_ENGINES.add('RENDERFARMFI_RENDER')
+    try:        subclass.COMPAT_ENGINES.add('CLOUDRENDER')
     except:    pass
 del properties_scene
 
 from bl_ui import properties_world
 for member in dir(properties_world):
     subclass = getattr(properties_world, member)
-    try:        subclass.COMPAT_ENGINES.add('RENDERFARMFI_RENDER')
+    try:        subclass.COMPAT_ENGINES.add('CLOUDRENDER')
     except:    pass
 del properties_world
 
 from bl_ui import properties_material
 for member in dir(properties_material):
     subclass = getattr(properties_material, member)
-    try:        subclass.COMPAT_ENGINES.add('RENDERFARMFI_RENDER')
+    try:        subclass.COMPAT_ENGINES.add('CLOUDRENDER')
     except:    pass
 del properties_material
 
 from bl_ui import properties_object
 for member in dir(properties_object):
     subclass = getattr(properties_object, member)
-    try:        subclass.COMPAT_ENGINES.add('RENDERFARMFI_RENDER')
+    try:        subclass.COMPAT_ENGINES.add('CLOUDRENDER')
     except:    pass
 del properties_object
