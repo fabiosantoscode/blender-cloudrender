@@ -129,6 +129,9 @@ class CloudRender(bpy.types.RenderEngine):
             for tile in self.job(job_data).results:
                 tile_data = (tile['x'], tile['y'],
                     tile['w'], tile['h'])
+                if tile_data not in tiles_to_go:
+                    continue
+
                 self.draw_tile(*tile_data, tile=tile['tile'])
                 tiles_to_go.remove(tile_data)
                 tiles_done += 1

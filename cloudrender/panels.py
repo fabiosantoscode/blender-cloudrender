@@ -46,8 +46,7 @@ class LOGIN_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
             col.prop(ore, 'password', icon=bpy.statusMessage['password'])
             layout.operator('ore.login')
         else:
-            layout.label(text='Successfully logged in as:', icon='INFO')
-            layout.label(text=bpy.rffi_user)
+            layout.label(text='Successfully logged in', icon='INFO')
             layout.operator('ore.change_user')
 
 class RENDER_PT_RenderfarmFi(RenderButtonsPanel, bpy.types.Panel):
