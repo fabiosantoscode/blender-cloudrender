@@ -204,6 +204,7 @@ class CloudRender(bpy.types.RenderEngine):
 
         export_cycles(fp=fp, scene=scene)
         scene_xml = fp.getvalue()
+
         # scene_xml = open('example_scene.xml').read()
         emcycles_core = open('cloudrender/emcycles/cloudrender_core.js').read()
 
