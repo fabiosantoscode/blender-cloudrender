@@ -85,11 +85,6 @@ class RENDERFARM_MT_Session(bpy.types.Menu):
             row.label(text="You must login first")
 
 
-from itertools import zip_longest
-
-def chunks(iterable, chunksize, filler=None):
-    return zip_longest(*[iter(iterable)]*chunksize, fillvalue=filler)
-
 class CloudRender(bpy.types.RenderEngine):
     bl_idname = 'CLOUDRENDER'
     bl_label = 'CloudRender'
@@ -142,12 +137,9 @@ class CloudRender(bpy.types.RenderEngine):
         self.job.delete()
 
     def draw_tile(self, x, y, w, h, tile):
-        pixel_colors = chunks((color / 255 for color in tile), 4)
-        pixel_colors = [tuple(color) for color in pixel_colors]
-
         assert x >= 0 and x + w <= self.width
         assert y >= 0 and y + h <= self.height
-        assert len(pixel_colors) == len(self.image)
+        assert len(tile)  == len(self.image) * 4
 
         width = self.width
         image = self.image
@@ -159,7 +151,12 @@ class CloudRender(bpy.types.RenderEngine):
             for x_coord in range(x, x + w):
                 ind = row + x_coord
                 rev_ind = rev_row + x_coord
-                image[rev_ind] = pixel_colors[ind]
+                image[rev_ind] = (
+                    tile[(ind * 4)    ] / 255,
+                    tile[(ind * 4) + 1] / 255,
+                    tile[(ind * 4) + 2] / 255,
+                    tile[(ind * 4) + 3] / 255,
+                    )
 
         self.result.layers[0].rect = image
         self.update_result(self.result)
