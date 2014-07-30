@@ -3,7 +3,7 @@ import json
 from base64 import b64encode
 from collections import namedtuple
 from threading import Thread
-from time import time
+from time import time, sleep
 try:
     import queue
 except ImportError:
@@ -215,7 +215,7 @@ class Job(object):
             while True:
                 inputready = []
                 try:
-                    inputready, _,_ = select.select(inputs, [], [], 0.001)
+                    inputready, _,_ = select.select(inputs, [], [], 0.01)
                 except select.error:
                     break
                 except socket.error:
@@ -255,16 +255,18 @@ class Job(object):
 
         def results_gen():
             while results_and_errors.is_alive() or not results_queue.empty():
+                sleep(0)
                 try:
-                    yield results_queue.get(True, 0.001)
+                    yield results_queue.get(True, 0.25)
                 except queue.Empty:
                     continue
                 results_queue.task_done()
 
         def errors_gen():
             while results_and_errors.is_alive() or not errors_queue.empty():
+                sleep(0)
                 try:
-                    yield errors_queue.get(True, 0.001)
+                    yield errors_queue.get(True, 0.25)
                 except queue.Empty:
                     continue
                 errors_queue.task_done()
