@@ -26,16 +26,16 @@ def viewport_columns(width, size=10):
         else:
             yield i, size
 
-def viewport_divisions(height, width, bucket_size=10):
-    assert height > 0 and width > 0 and bucket_size > 0
+def viewport_divisions(height, width, bucket_height=64, bucket_width=64):
+    assert height > 0 and width > 0 and bucket_height > 0 and bucket_width > 0
 
-    for y in range(0, height, bucket_size):
-        for x, col_width in viewport_columns(width, bucket_size):
-            last = y + bucket_size
-            if y + bucket_size > height:
+    for y in range(0, height, bucket_height):
+        for x, col_width in viewport_columns(width, bucket_width):
+            last = y + bucket_height
+            if y + bucket_height > height:
                 yield (x, y, col_width, height - y)
             else:
-                yield (x, y, col_width, bucket_size)
+                yield (x, y, col_width, bucket_height)
 
 
 

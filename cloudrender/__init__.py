@@ -39,6 +39,39 @@ from .panels import *
 from .operators import *
 
 
+base_64_enc = '''
+// From: http://www.webtoolkit.info/
+function base64(input) {
+  var keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  var output = "";
+  var chr1, chr2, chr3, enc1, enc2, enc3, enc4;
+  var i = 0;
+
+  while (i < input.length) {
+    chr1 = input[i++];
+    chr2 = input[i++];
+    chr3 = input[i++];
+
+    enc1 = chr1 >> 2;
+    enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+    enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+    enc4 = chr3 & 63;
+
+    if (isNaN(chr2)) {
+      enc3 = enc4 = 64;
+    } else if (isNaN(chr3)) {
+      enc4 = 64;
+    }
+
+    output = output +
+      keyStr.charAt(enc1) + keyStr.charAt(enc2) +
+      keyStr.charAt(enc3) + keyStr.charAt(enc4);
+  }
+
+  return output;
+}
+'''
+
 
 bpy.passwordCorrect = False
 
@@ -93,6 +126,7 @@ class CloudRender(bpy.types.RenderEngine):
 
     def render(self, scene):
         import json
+        import math
 
         resolution_fraction = (100 / scene.render.resolution_percentage)
         self.height, self.width = (
@@ -110,24 +144,29 @@ class CloudRender(bpy.types.RenderEngine):
         tiles_total = len(tiles_to_go)
         tiles_done = 1
 
-        for retry in range(5):
+        retries = int(math.sqrt(tiles_total) + 5)
+
+        for retry in range(retries):
             if not tiles_to_go:
                 break
 
             if retry > 0:
-                print('Retrying some tiles... %d' % retry)
+                print('Retrying %d tiles... %d' % (len(tiles_to_go), retry))
 
             job_data = (
                 { 'x': x, 'y': y, 'w': w, 'h': h }
                 for x, y, w, h in tiles_to_go)
 
-            for tile in self.job(job_data).results:
+            for tile in self.job(list(job_data)).results:
                 tile_data = (tile['x'], tile['y'],
                     tile['w'], tile['h'])
                 if tile_data not in tiles_to_go:
+                    print('???? We\'ve already rendered this tile: %r' % tile_data)
                     continue
 
-                self.draw_tile(*tile_data, tile=tile['tile'])
+                import base64
+
+                self.draw_tile(*tile_data, tile=base64.b64decode(tile['tile']), hasAlpha=tile['hasAlpha'])
                 tiles_to_go.remove(tile_data)
                 tiles_done += 1
                 self.update_progress(tiles_done / tiles_total)
@@ -136,7 +175,7 @@ class CloudRender(bpy.types.RenderEngine):
         self.end_result(self.result)
         self.job.delete()
 
-    def draw_tile(self, x, y, w, h, tile):
+    def draw_tile(self, x, y, w, h, tile, hasAlpha):
         assert x >= 0 and x + w <= self.width
         assert y >= 0 and y + h <= self.height
 
@@ -150,12 +189,21 @@ class CloudRender(bpy.types.RenderEngine):
             for x_coord in range(w):
                 ind = row + x_coord
                 rev_ind = rev_row + x_coord + x
-                image[rev_ind] = (
-                    tile[(ind * 4)    ] / 255,
-                    tile[(ind * 4) + 1] / 255,
-                    tile[(ind * 4) + 2] / 255,
-                    tile[(ind * 4) + 3] / 255,
-                    )
+                if hasAlpha:
+                    ind *= 4
+                    image[rev_ind] = (
+                        tile[ind    ] / 255,
+                        tile[ind + 1] / 255,
+                        tile[ind + 2] / 255,
+                        tile[ind + 3] / 255,
+                        )
+                else:
+                    ind *= 3
+                    image[rev_ind] = (
+                        tile[ind    ] / 255,
+                        tile[ind + 1] / 255,
+                        tile[ind + 2] / 255,
+                        )
 
         self.result.layers[0].rect = image
         self.update_result(self.result)
@@ -177,6 +225,12 @@ class CloudRender(bpy.types.RenderEngine):
 
         crowdprocess_func = '''
             function Run(data) {
+                var console = {
+                    log: function(){},
+                    error: function(){},
+                    warn: function(){},
+                    assert: function(){}
+                };
                 var Module = {
                     print: function () {},
                     tileX: data.x,
@@ -190,11 +244,32 @@ class CloudRender(bpy.types.RenderEngine):
 
                 %s;
 
-                data.tile = Module.imageData
+                var tile = data.tile = Module.imageData
+
+                data.hasAlpha = false;
+
+                for (var i = 0, len = tile.length; i < len; i += 4) {
+                    if (tile[i] !== 255) {
+                        data.hasAlpha = true;
+                        break;
+                    }
+                }
+
+                if (!data.hasAlpha) {
+                    data.tile = [];
+
+                    for (var i = 0, len = tile.length; i < len; i+=4) {
+                        data.tile.push(tile[i], tile[i+1], tile[i+2]);
+                    }
+                }
+
+                %s;
+
+                data.tile = base64(data.tile)
 
                 return data
             }
-        ''' % (json.dumps(scene_xml), emcycles_core)
+        ''' % (json.dumps(scene_xml), emcycles_core, base_64_enc)
 
         open('/tmp/wow.js', 'w').write(crowdprocess_func)
 
