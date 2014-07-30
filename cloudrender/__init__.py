@@ -139,18 +139,17 @@ class CloudRender(bpy.types.RenderEngine):
     def draw_tile(self, x, y, w, h, tile):
         assert x >= 0 and x + w <= self.width
         assert y >= 0 and y + h <= self.height
-        assert len(tile)  == len(self.image) * 4
 
         width = self.width
         image = self.image
         img_size = len(image)
 
-        for y_coord in range(y, y + h):
-            row = y_coord * width
-            rev_row = (self.height - y_coord - 1) * width
-            for x_coord in range(x, x + w):
+        for y_coord in range(h):
+            row = y_coord * w
+            rev_row = (self.height - (y + y_coord) - 1) * width
+            for x_coord in range(w):
                 ind = row + x_coord
-                rev_ind = rev_row + x_coord
+                rev_ind = rev_row + x_coord + x
                 image[rev_ind] = (
                     tile[(ind * 4)    ] / 255,
                     tile[(ind * 4) + 1] / 255,
