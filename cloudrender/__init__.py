@@ -31,6 +31,8 @@ import bpy
 import math
 import json
 import imp
+import base64
+
 
 from bpy.props import PointerProperty, StringProperty
 
@@ -140,39 +142,26 @@ class CloudRender(bpy.types.RenderEngine):
         self.make_job(scene)
 
         self.image = [(0,0,0,1)] * self.height * self.width
-        tiles_to_go = set(viewport_divisions(self.height, self.width))
 
         self.result = self.begin_result(0, 0, self.width, self.height)
 
-        tiles_total = len(tiles_to_go)
-        tiles_done = 1
+        divisions = list(viewport_divisions(
+            height=self.height,
+            width=self.width))
 
-        retries = int(math.sqrt(tiles_total) + 5)
+        tiles = crptiles.tiles_from_crowdprocess(self.job, divisions)
 
-        for retry in range(retries):
-            if not tiles_to_go:
-                break
+        total_tile_count = len(divisions)
+        tiles_done = 0
 
-            if retry > 0:
-                print('Retrying %d tiles... %d' % (len(tiles_to_go), retry))
+        for tile, tile_rect in tiles:
+            self.draw_tile(
+                *tile_rect,
+                tile=base64.b64decode(tile['tile']),
+                hasAlpha=tile['hasAlpha'])
 
-            job_data = (
-                { 'x': x, 'y': y, 'w': w, 'h': h }
-                for x, y, w, h in tiles_to_go)
-
-            for tile in self.job(list(job_data)).results:
-                tile_data = (tile['x'], tile['y'],
-                    tile['w'], tile['h'])
-                if tile_data not in tiles_to_go:
-                    print('???? We\'ve already rendered this tile: %r' % tile_data)
-                    continue
-
-                import base64
-
-                self.draw_tile(*tile_data, tile=base64.b64decode(tile['tile']), hasAlpha=tile['hasAlpha'])
-                tiles_to_go.remove(tile_data)
-                tiles_done += 1
-                self.update_progress(tiles_done / tiles_total)
+            tiles_done += 1
+            self.update_progress(tiles_done / total_tile_count)
 
         self.result.layers[0].rect = self.image
         self.end_result(self.result)
