@@ -29,14 +29,18 @@ bl_info = {
 
 import bpy
 import math
-from os.path import isabs, isfile, join, exists
-import os
-import time
+import json
+import imp
 
-from bpy.props import PointerProperty, StringProperty, BoolProperty, EnumProperty, IntProperty, CollectionProperty
+from bpy.props import PointerProperty, StringProperty
 
 from .panels import *
 from .operators import *
+
+from io import StringIO
+from .xml_exporter.io_scene_cycles import export_cycles
+from . import crowdprocess
+from . import crptiles
 
 
 base_64_enc = '''
@@ -125,8 +129,7 @@ class CloudRender(bpy.types.RenderEngine):
     bl_use_shading_nodes = True
 
     def render(self, scene):
-        import json
-        import math
+        imp.reload(crptiles)
 
         resolution_fraction = (100 / scene.render.resolution_percentage)
         self.height, self.width = (
@@ -210,14 +213,13 @@ class CloudRender(bpy.types.RenderEngine):
 
 
     def make_job(self, scene):
-        from io import StringIO
-        import json
-        from .xml_exporter.io_scene_cycles.export_cycles import export_cycles
-        from .crowdprocess import CrowdProcess
+        imp.reload(export_cycles)
+        imp.reload(crowdprocess)
 
         fp = StringIO()
 
-        export_cycles(fp=fp, scene=scene)
+        export_cycles.export_cycles(
+            fp=fp, scene=scene, inline_textures=True)
         scene_xml = fp.getvalue()
 
         # scene_xml = open('example_scene.xml').read()
@@ -229,6 +231,8 @@ class CloudRender(bpy.types.RenderEngine):
                     log: function(){},
                     error: function(){},
                     warn: function(){},
+                    time: function(){},
+                    timeEnd: function(){},
                     assert: function(){}
                 };
                 var Module = {
@@ -273,13 +277,13 @@ class CloudRender(bpy.types.RenderEngine):
 
         open('/tmp/wow.js', 'w').write(crowdprocess_func)
 
-        crowdprocess = CrowdProcess(
+        crp = crowdprocess.CrowdProcess(
             scene.ore_render.username, scene.ore_render.password)
 
         crowdprocess = CrowdProcess(
             scene.ore_render.username, scene.ore_render.password)
 
-        self.job = crowdprocess.job(crowdprocess_func)
+        self.job = crp.job(crowdprocess_func)
 
 
 
