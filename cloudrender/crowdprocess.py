@@ -205,7 +205,6 @@ class Job(object):
         inputs = [results_raw_req, errors_raw_req]
 
         results_queue = queue.Queue()
-        errors_queue = queue.Queue()
 
         tasks = Thread(target=self.submit_tasks, args=(genwrapper(),))
         tasks.daemon = True
@@ -242,7 +241,6 @@ class Job(object):
                         line = errors_raw_req.readline()
                         if len(line) == 0:
                             continue
-                        errors_queue.put(json.loads(line.decode()))
                         self._batch_out[batch] -= 1
 
                 if not tasks.is_alive() and self._batch_out[batch] == 0:
@@ -257,20 +255,11 @@ class Job(object):
             while results_and_errors.is_alive() or not results_queue.empty():
                 sleep(0)
                 try:
-                    yield results_queue.get(True, 0.25)
+                    yield results_queue.get(True, 2.5)
                 except queue.Empty:
                     continue
                 results_queue.task_done()
 
-        def errors_gen():
-            while results_and_errors.is_alive() or not errors_queue.empty():
-                sleep(0)
-                try:
-                    yield errors_queue.get(True, 0.25)
-                except queue.Empty:
-                    continue
-                errors_queue.task_done()
-
         Data = namedtuple('Data', 'results, errors')
 
-        return Data(results_gen(), errors_gen())
+        return Data(results_gen(), None)
