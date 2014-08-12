@@ -32,6 +32,7 @@ import math
 import json
 import imp
 import base64
+import zlib
 
 
 from bpy.props import PointerProperty, StringProperty
@@ -155,10 +156,14 @@ class CloudRender(bpy.types.RenderEngine):
         tiles_done = 0
 
         for tile, tile_rect in tiles:
+            tile_data = base64.b64decode(tile['tile'])
+
+            if tile['deflated'] == True:
+                tile_data = zlib.decompress(tile_data)
+
             self.draw_tile(
                 *tile_rect,
-                tile=base64.b64decode(tile['tile']),
-                hasAlpha=tile['hasAlpha'])
+                tile=tile_data)
 
             tiles_done += 1
             self.update_progress(tiles_done / total_tile_count)
@@ -167,7 +172,7 @@ class CloudRender(bpy.types.RenderEngine):
         self.end_result(self.result)
         self.job.delete()
 
-    def draw_tile(self, x, y, w, h, tile, hasAlpha):
+    def draw_tile(self, x, y, w, h, tile):
         assert x >= 0 and x + w <= self.width
         assert y >= 0 and y + h <= self.height
 
@@ -181,21 +186,13 @@ class CloudRender(bpy.types.RenderEngine):
             for x_coord in range(w):
                 ind = row + x_coord
                 rev_ind = rev_row + x_coord + x
-                if hasAlpha:
-                    ind *= 4
-                    image[rev_ind] = (
-                        tile[ind    ] / 255,
-                        tile[ind + 1] / 255,
-                        tile[ind + 2] / 255,
-                        tile[ind + 3] / 255,
-                        )
-                else:
-                    ind *= 3
-                    image[rev_ind] = (
-                        tile[ind    ] / 255,
-                        tile[ind + 1] / 255,
-                        tile[ind + 2] / 255,
-                        )
+                ind *= 4
+                image[rev_ind] = (
+                    tile[ind    ] / 255,
+                    tile[ind + 1] / 255,
+                    tile[ind + 2] / 255,
+                    tile[ind + 3] / 255,
+                    )
 
         self.result.layers[0].rect = image
         self.update_result(self.result)
@@ -213,6 +210,8 @@ class CloudRender(bpy.types.RenderEngine):
 
         # scene_xml = open('example_scene.xml').read()
         emcycles_core = open('cloudrender/emcycles/cloudrender_core.js').read()
+
+        pako = open('pako_deflate.js').read()
 
         crowdprocess_func = '''
             function Run(data) {
@@ -232,37 +231,28 @@ class CloudRender(bpy.types.RenderEngine):
                     tileW: data.w
                 }
 
-                var SCENE = %s;
+                var SCENE = %s;  // scene_xml
                 var INCLUDES = [];
 
-                %s;
+                ;%s;  // emcycles
 
-                var tile = data.tile = Module.imageData
+                data.tile = Module.imageData
 
-                data.hasAlpha = false;
+                ;%s;  // pako
 
-                for (var i = 0, len = tile.length; i < len; i += 4) {
-                    if (tile[i] !== 255) {
-                        data.hasAlpha = true;
-                        break;
-                    }
+                ;%s;  // base64
+
+                var deflated = pako.deflate(data.tile)
+
+                if (deflated.length < data.tile.length) {
+                    data.tile = deflated
+                    data.deflated = true
                 }
-
-                if (!data.hasAlpha) {
-                    data.tile = [];
-
-                    for (var i = 0, len = tile.length; i < len; i+=4) {
-                        data.tile.push(tile[i], tile[i+1], tile[i+2]);
-                    }
-                }
-
-                %s;
-
                 data.tile = base64(data.tile)
 
                 return data
             }
-        ''' % (json.dumps(scene_xml), emcycles_core, base_64_enc)
+        ''' % (json.dumps(scene_xml), emcycles_core, pako, base_64_enc)
 
         open('/tmp/wow.js', 'w').write(crowdprocess_func)
 
