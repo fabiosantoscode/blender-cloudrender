@@ -28,6 +28,7 @@ bl_info = {
     "category": "Render"}
 
 import bpy
+from os import path
 import math
 import json
 import imp
@@ -209,9 +210,11 @@ class CloudRender(bpy.types.RenderEngine):
         scene_xml = fp.getvalue()
 
         # scene_xml = open('example_scene.xml').read()
-        emcycles_core = open('cloudrender/emcycles/cloudrender_core.js').read()
+        emcycles_core = open(path.join(path.dirname(__file__),
+            'emcycles/cloudrender_core.js')).read()
 
-        pako = open('pako_deflate.js').read()
+        pako = open(path.join(path.dirname(__file__),
+            'pako_deflate.js')).read()
 
         crowdprocess_func = '''
             function Run(data) {
@@ -257,9 +260,6 @@ class CloudRender(bpy.types.RenderEngine):
         open('/tmp/wow.js', 'w').write(crowdprocess_func)
 
         crp = crowdprocess.CrowdProcess(
-            scene.ore_render.username, scene.ore_render.password)
-
-        crowdprocess = CrowdProcess(
             scene.ore_render.username, scene.ore_render.password)
 
         self.job = crp.job(crowdprocess_func)
