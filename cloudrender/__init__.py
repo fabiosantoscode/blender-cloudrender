@@ -209,7 +209,6 @@ class CloudRender(bpy.types.RenderEngine):
             fp=fp, scene=scene, inline_textures=True)
         scene_xml = fp.getvalue()
 
-        # scene_xml = open('example_scene.xml').read()
         emcycles_core = open(path.join(path.dirname(__file__),
             'emcycles/cloudrender_core.js')).read()
 
@@ -257,7 +256,7 @@ class CloudRender(bpy.types.RenderEngine):
             }
         ''' % (json.dumps(scene_xml), emcycles_core, pako, base_64_enc)
 
-        open('/tmp/wow.js', 'w').write(crowdprocess_func)
+        # open('/tmp/wow.js', 'w').write(crowdprocess_func)
 
         crp = crowdprocess.CrowdProcess(
             scene.ore_render.username, scene.ore_render.password)
