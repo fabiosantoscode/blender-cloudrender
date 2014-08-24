@@ -104,7 +104,7 @@ def renderEngine(render_engine):
 
 class ORESettings(bpy.types.PropertyGroup):
     username = StringProperty(name='E-mail', description='E-mail for Renderfarm.fi', maxlen=256, default='')
-    password = StringProperty(name='Password', description='Renderfarm.fi password', maxlen=256, default='')
+    password = StringProperty(name='Password', description='Renderfarm.fi password', maxlen=256, default='', subtype='PASSWORD')
 
 # session struct
 
