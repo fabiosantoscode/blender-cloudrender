@@ -149,7 +149,9 @@ class CloudRender(bpy.types.RenderEngine):
 
         divisions = list(viewport_divisions(
             height=self.height,
-            width=self.width))
+            width=self.width,
+            bucket_height=scene.render.tile_y,
+            bucket_width=scene.render.tile_x))
 
         tiles = crptiles.tiles_from_crowdprocess(self.job, divisions)
 
