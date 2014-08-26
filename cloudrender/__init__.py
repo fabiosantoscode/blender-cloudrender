@@ -28,57 +28,17 @@ bl_info = {
     "category": "Render"}
 
 import bpy
-from os import path
 import math
-import json
 import imp
-import base64
-import zlib
 
 
 from bpy.props import PointerProperty, StringProperty
 
 from .panels import *
 from .operators import *
-
-from io import StringIO
-from .xml_exporter.io_scene_cycles import export_cycles
 from . import crowdprocess
-from . import crptiles
 
-
-base_64_enc = '''
-// From: http://www.webtoolkit.info/
-function base64(input) {
-  var keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-  var output = "";
-  var chr1, chr2, chr3, enc1, enc2, enc3, enc4;
-  var i = 0;
-
-  while (i < input.length) {
-    chr1 = input[i++];
-    chr2 = input[i++];
-    chr3 = input[i++];
-
-    enc1 = chr1 >> 2;
-    enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
-    enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
-    enc4 = chr3 & 63;
-
-    if (isNaN(chr2)) {
-      enc3 = enc4 = 64;
-    } else if (isNaN(chr3)) {
-      enc4 = 64;
-    }
-
-    output = output +
-      keyStr.charAt(enc1) + keyStr.charAt(enc2) +
-      keyStr.charAt(enc3) + keyStr.charAt(enc4);
-  }
-
-  return output;
-}
-'''
+from . import renderer
 
 
 bpy.passwordCorrect = False
@@ -133,37 +93,26 @@ class CloudRender(bpy.types.RenderEngine):
     bl_use_shading_nodes = True
 
     def render(self, scene):
-        imp.reload(crptiles)
+        imp.reload(renderer)
+        imp.reload(crowdprocess)
 
-        resolution_fraction = (100 / scene.render.resolution_percentage)
-        self.height, self.width = (
-            int(scene.render.resolution_y / resolution_fraction),
-            int(scene.render.resolution_x / resolution_fraction),
-        )
+        rnd = renderer.Renderer(scene=scene,
+            crp=crowdprocess.CrowdProcess(
+                scene.ore_render.username,
+                scene.ore_render.password))
 
-        self.make_job(scene)
+        rnd.run_async()
 
-        self.image = [(0,0,0,1)] * self.height * self.width
+        self.height, self.width = rnd.height, rnd.width
+
+        self.image = [(0,0,0,1)] * (self.height * self.width)
 
         self.result = self.begin_result(0, 0, self.width, self.height)
 
-        divisions = list(viewport_divisions(
-            height=self.height,
-            width=self.width,
-            bucket_height=scene.render.tile_y,
-            bucket_width=scene.render.tile_x))
-
-        tiles = crptiles.tiles_from_crowdprocess(self.job, divisions)
-
-        total_tile_count = len(divisions)
+        total_tile_count = len(rnd.divisions)
         tiles_done = 0
 
-        for tile, tile_rect in tiles:
-            tile_data = base64.b64decode(tile['tile'])
-
-            if tile['deflated'] == True:
-                tile_data = zlib.decompress(tile_data)
-
+        for tile_rect, tile_data in rnd.iter_tiles():
             self.draw_tile(
                 *tile_rect,
                 tile=tile_data)
@@ -173,7 +122,6 @@ class CloudRender(bpy.types.RenderEngine):
 
         self.result.layers[0].rect = self.image
         self.end_result(self.result)
-        self.job.delete()
 
     def draw_tile(self, x, y, w, h, tile):
         assert x >= 0 and x + w <= self.width
@@ -199,71 +147,6 @@ class CloudRender(bpy.types.RenderEngine):
 
         self.result.layers[0].rect = image
         self.update_result(self.result)
-
-
-    def make_job(self, scene):
-        imp.reload(export_cycles)
-        imp.reload(crowdprocess)
-
-        fp = StringIO()
-
-        export_cycles.export_cycles(
-            fp=fp, scene=scene, inline_textures=True)
-        scene_xml = fp.getvalue()
-
-        emcycles_core = open(path.join(path.dirname(__file__),
-            'emcycles/cloudrender_core.js')).read()
-
-        pako = open(path.join(path.dirname(__file__),
-            'pako_deflate.js')).read()
-
-        crowdprocess_func = '''
-            function Run(data) {
-                var console = {
-                    log: function(){},
-                    error: function(){},
-                    warn: function(){},
-                    time: function(){},
-                    timeEnd: function(){},
-                    assert: function(){}
-                };
-                var Module = {
-                    print: function () {},
-                    tileX: data.x,
-                    tileY: data.y,
-                    tileH: data.h,
-                    tileW: data.w
-                }
-
-                var SCENE = %s;  // scene_xml
-                var INCLUDES = [];
-
-                ;%s;  // emcycles
-
-                data.tile = Module.imageData
-
-                ;%s;  // pako
-
-                ;%s;  // base64
-
-                var deflated = pako.deflate(data.tile)
-
-                if (deflated.length < data.tile.length) {
-                    data.tile = deflated
-                    data.deflated = true
-                }
-                data.tile = base64(data.tile)
-
-                return data
-            }
-        ''' % (json.dumps(scene_xml), emcycles_core, pako, base_64_enc)
-
-        # open('/tmp/wow.js', 'w').write(crowdprocess_func)
-
-        crp = crowdprocess.CrowdProcess(
-            scene.ore_render.username, scene.ore_render.password)
-
-        self.job = crp.job(crowdprocess_func)
 
 
 
